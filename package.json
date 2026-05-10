@@ -1,0 +1,54 @@
+{
+  "name": "@rift-finance/react",
+  "version": "0.1.0",
+  "description": "React bindings for the Rift sign-in widget. Drop in <RiftProvider>, render <RiftAuth>, and read auth state with useRift().",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rift-finance/rift.git",
+    "directory": "rift-react"
+  },
+  "homepage": "https://riftfi.xyz",
+  "keywords": [
+    "rift",
+    "rift-finance",
+    "auth",
+    "wallet",
+    "embedded-wallet",
+    "react",
+    "oauth"
+  ],
+  "type": "module",
+  "main": "./dist/rift-react.cjs",
+  "module": "./dist/rift-react.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/rift-react.js",
+      "require": "./dist/rift-react.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "dev": "vite build --watch"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.18",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}

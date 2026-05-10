@@ -1,0 +1,70 @@
+name: Publish @rift-finance/react
+
+# Two triggers:
+#   - workflow_dispatch: the "Run workflow" button in the Actions tab.
+#     Fastest path for a one-off publish.
+#   - release: published: triggers when you cut a GitHub Release. Tag
+#     the release `v0.1.0` (or whatever matches package.json) and the
+#     workflow runs automatically.
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Run npm publish in dry-run mode (no actual publish)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Read repo contents.
+      contents: read
+      # Required for npm provenance — links the published tarball to
+      # this specific workflow run, the commit SHA, and the source repo.
+      # Verifiable by anyone via `npm view @rift-finance/react`.
+      id-token: write
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          # `npm publish` reads from `${NODE_AUTH_TOKEN}` when this is set.
+          always-auth: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc -b
+
+      - name: Build
+        run: npx vite build
+
+      - name: Show package contents (sanity check)
+        # Lists exactly what would ship — catches accidental inclusion
+        # of node_modules / src files if the "files" field is wrong.
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "Dry-run mode — not publishing."
+            npm publish --access public --provenance --dry-run
+          else
+            npm publish --access public --provenance
+          fi
