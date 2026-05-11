@@ -7,7 +7,24 @@ import { resolve } from "node:path";
 // an iframe overlay and exposes the auth events via React-native hooks.
 // We ship ESM + CJS + .d.ts so it works in every modern toolchain.
 export default defineConfig({
-  plugins: [react(), dts({ include: ["src"] })],
+  plugins: [
+    react(),
+    // Generate type declarations next to the JS bundles in dist/. We
+    // pass an explicit outDir + override compilerOptions because
+    // tsconfig.lib.json has `noEmit: true` (for plain `tsc -b`
+    // verification) which otherwise suppresses .d.ts emission.
+    dts({
+      include: ["src"],
+      outDir: "dist",
+      entryRoot: "src",
+      insertTypesEntry: true,
+      compilerOptions: {
+        noEmit: false,
+        declaration: true,
+        emitDeclarationOnly: true,
+      },
+    }),
+  ],
   build: {
     lib: {
       entry: resolve(__dirname, "src/index.ts"),
