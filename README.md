@@ -112,11 +112,18 @@ interface RiftUser {
 }
 ```
 
-## Configuring Google sign-in
+## Auth methods
 
-1. Create an OAuth 2.0 Client ID in Google Cloud Console for your domain.
-2. Paste it into your project's **Auth** tab in the Rift dashboard.
-3. The widget refetches its config on next load — the Google button shows up automatically.
+Email + phone OTP work out of the box — no setup, Rift handles the code delivery. Google sign-in is opt-in: **you** register your own Google OAuth Client ID (not Rift's), then paste it into your project's **Auth** tab in the Rift dashboard. The widget reads it from your project config and uses it on the client; Rift's backend verifies each token's `aud` against your project's allowlist (so one project's tokens can't be replayed against another).
+
+```
+1. Google Cloud Console → APIs & Services → Credentials → Create OAuth 2.0 Client ID
+2. Authorized origins: https://yoursite.com
+3. Copy the Client ID
+4. Rift dashboard → your project → Auth → paste it → Save
+```
+
+Apple Sign In follows the same pattern.
 
 ## Self-hosting the widget
 

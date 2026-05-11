@@ -9,20 +9,15 @@ import { resolve } from "node:path";
 export default defineConfig({
   plugins: [
     react(),
-    // Generate type declarations next to the JS bundles in dist/. We
-    // pass an explicit outDir + override compilerOptions because
-    // tsconfig.lib.json has `noEmit: true` (for plain `tsc -b`
-    // verification) which otherwise suppresses .d.ts emission.
+    // Generate .d.ts files into dist/ alongside the JS bundles. We
+    // point at a dedicated tsconfig that lifts the `noEmit: true` flag
+    // that tsconfig.lib.json carries for plain `tsc -b` verification.
     dts({
+      tsconfigPath: "./tsconfig.dts.json",
       include: ["src"],
       outDir: "dist",
       entryRoot: "src",
       insertTypesEntry: true,
-      compilerOptions: {
-        noEmit: false,
-        declaration: true,
-        emitDeclarationOnly: true,
-      },
     }),
   ],
   build: {

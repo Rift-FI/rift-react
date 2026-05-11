@@ -1,6 +1,6 @@
 {
   "name": "@rift-finance/react",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "React bindings for the Rift sign-in widget. Drop in <RiftProvider>, render <RiftAuth>, and read auth state with useRift().",
   "repository": {
     "type": "git",
