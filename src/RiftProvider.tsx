@@ -315,6 +315,28 @@ export function RiftProvider({
       origin: typeof window !== "undefined" ? window.location.origin : "",
       t: String(openToken),
     });
+
+    // Best-effort: match the host page's theme so the modal blends in
+    // instead of flashing white over a dark site. Checks data-theme,
+    // the `dark` class convention, then system preference.
+    if (typeof document !== "undefined") {
+      const html = document.documentElement;
+      const attr = html.getAttribute("data-theme");
+      let theme: string | null = null;
+      if (attr === "dark" || attr === "light") theme = attr;
+      else if (
+        html.classList.contains("dark") ||
+        document.body?.classList.contains("dark")
+      )
+        theme = "dark";
+      else if (
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches
+      )
+        theme = "dark";
+      if (theme) params.set("theme", theme);
+    }
+
     return `${resolvedWidgetUrl.replace(/\/$/, "")}/?${params.toString()}`;
   }, [apiKey, mode, openToken, resolvedWidgetUrl]);
 
