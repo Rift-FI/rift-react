@@ -11,7 +11,17 @@ import {
 import type { RiftConfig, RiftEvent, RiftMode, RiftUser } from "./types";
 import { silentLogout, silentRefresh } from "./silentRefresh";
 
-const DEFAULT_WIDGET_URL = "https://widget.riftfi.xyz";
+// Widget URL by environment. The widget is a separate Vite SPA that
+// gets built once per environment (the backend URL is baked into the
+// bundle), so picking the environment here is equivalent to picking
+// which deployed widget the iframe loads.
+//
+// Override either by passing `widgetUrl=` directly (wins over
+// `environment`), or self-host and point at your own URL.
+const WIDGET_URL_BY_ENV: Record<"production" | "sandbox", string> = {
+  production: "https://widget.riftfi.xyz",
+  sandbox: "https://widget.sandbox.riftfi.com",
+};
 
 // v2 session-mode policy: the access token lives in memory only. We
 // persist a small "identity hint" (user id, address, btcAddress) so the
@@ -98,12 +108,14 @@ function saveIdentity(id: PersistedIdentity | null) {
 
 export function RiftProvider({
   apiKey,
+  environment,
   widgetUrl,
   children,
   autoOpen = false,
   persist = true,
 }: RiftProviderProps) {
-  const resolvedWidgetUrl = widgetUrl || DEFAULT_WIDGET_URL;
+  const resolvedWidgetUrl =
+    widgetUrl || WIDGET_URL_BY_ENV[environment ?? "production"];
   const widgetOrigin = useMemo(() => {
     try {
       return new URL(resolvedWidgetUrl).origin;

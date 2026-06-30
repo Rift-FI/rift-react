@@ -22,8 +22,22 @@ export interface RiftUser {
 export interface RiftConfig {
   // The project's API key from the Rift dashboard. Required.
   apiKey: string;
-  // Override only when self-hosting the widget. Defaults to the
-  // public Rift-hosted widget at https://widget.riftfi.xyz.
+  // Which Rift environment to talk to. Picks the default widget URL
+  // (which in turn determines the backend the widget calls + whether
+  // new wallets are minted as v3 / device-bound).
+  //
+  //   "production" (default) → https://widget.riftfi.xyz
+  //                             → backend https://service.riftfi.xyz
+  //                             → v1 signups (custodial), legacy behaviour
+  //
+  //   "sandbox"               → https://widget.sandbox.riftfi.com
+  //                             → backend https://sandbox.riftfi.com
+  //                             → v3 signups (passkey-bound, non-custodial)
+  //
+  // Pass `widgetUrl` to override completely (e.g. self-hosting).
+  environment?: "production" | "sandbox";
+  // Override completely. Wins over `environment` when both are set.
+  // Use when self-hosting the widget or pointing at a local dev build.
   widgetUrl?: string;
 }
 
