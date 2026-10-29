@@ -40,6 +40,12 @@ export function Nav() {
 
 That's it. Users get a Rift wallet provisioned on first sign-in (Google, email, or phone), and you get an access token to call Rift's API on their behalf.
 
+## Register the embedding page's origin
+
+Before going live, add the origin of **every page that renders `<RiftAuth />`** (for example `https://app.example.com`, plus `http://localhost:5173` or whatever you use in dev) to your project's **allowed origins** in the Rift dashboard (project → Origins → Add origin).
+
+`<RiftAuth />` renders the hosted Rift widget in an iframe, and passkey signing runs inside it, so the browser marks those WebAuthn assertions as cross-origin and records the embedding page as their top origin. The Rift signing enclave rejects a cross-origin assertion unless that top origin is one of the project's allowed origins. If the page is not registered, the modal may still load, but **passkey signing inside the iframe will be rejected**. There is nothing to change in your code: the list is enforced server-side from what you register in the dashboard (a custom `widget_domain` counts as registered).
+
 ## Making authenticated calls
 
 Use `getAccessToken()` rather than reading `user.accessToken` directly — it transparently refreshes via a hidden iframe if the current token is near expiry.
