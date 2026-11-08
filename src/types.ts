@@ -17,22 +17,61 @@ export interface RiftUser {
   // ISO timestamp when the current access token expires. Absent when
   // running against a backend that hasn't been upgraded to session mode.
   expiresAt?: string;
+  // Passkey-wallet state at sign-in (not persisted across reloads).
+  walletStatus?: RiftWalletStatus;
+  // Set when the user completed passkey setup during this sign-in.
+  passkeySetup?: RiftPasskeySetup;
+}
+
+/** Same object as GET /v1/wallet/status. */
+export interface RiftWalletStatus {
+  mode: "none" | "legacy" | "passkey";
+  walletAddress: string | null;
+  previousAddress?: string | null;
+  passkeyCount: number;
+  chains: Array<{
+    chainId: number;
+    deployed: boolean;
+    ownerMode: "legacy_eoa" | "passkey" | "undeployed";
+  }>;
+  needsPasskeySetup: boolean;
+}
+
+export interface RiftPasskeySetup {
+  status: "active" | "migrated" | "migrating" | "new_wallet" | "pending_signature";
+  walletAddress?: string;
+  // Set for "new_wallet": the old, unrecoverable address.
+  previousAddress?: string;
+}
+
+export type RiftApprovalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "failed";
+
+/** Terminal outcome reported by the widget's approve mode. */
+export interface RiftApprovalResult {
+  approvalId: string;
+  status: RiftApprovalStatus;
+  result?: { transactionHash?: string; userOpHash?: string };
 }
 
 export interface RiftConfig {
   // The project's API key from the Rift dashboard. Required.
   apiKey: string;
   // Which Rift environment to talk to. Picks the default widget URL
-  // (which in turn determines the backend the widget calls + whether
-  // new wallets are minted as v3 / device-bound).
+  // (which in turn determines the backend the widget calls).
   //
   //   "production" (default) → https://widget.riftfi.xyz
   //                             → backend https://service.riftfi.xyz
-  //                             → v1 signups (custodial), legacy behaviour
   //
   //   "sandbox"               → https://widget.sandbox.riftfi.com
   //                             → backend https://sandbox.riftfi.com
-  //                             → v3 signups (passkey-bound, non-custodial)
+  //
+  // Both use passkey-owned wallets: the widget sets up a passkey after
+  // login when the wallet needs one.
   //
   // Pass `widgetUrl` to override completely (e.g. self-hosting).
   environment?: "production" | "sandbox";
@@ -53,8 +92,12 @@ export type RiftEvent =
       accessToken: string;
       expiresAt?: string;
       expiresIn?: number;
+      walletStatus?: RiftWalletStatus;
+      passkeySetup?: RiftPasskeySetup;
     }
   | { type: "rift:signin-error"; message: string }
+  | ({ type: "rift:approval-result" } & RiftApprovalResult)
+  | { type: "rift:approval-error"; approvalId: string; message: string }
   | {
       type: "rift:refresh-result";
       requestId: string;

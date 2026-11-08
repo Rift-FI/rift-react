@@ -165,11 +165,9 @@ export function RiftAuth({
         onLoad={_onIframeLoad}
         title="Rift sign-in"
         // WebAuthn permissions delegated to the cross-origin widget iframe:
-        //   -create: needed for enrolment (navigator.credentials.create). The
-        //            widget's sandbox / v3 flavour enrols a passkey post-login
-        //            and calls /wallet/migrate-to-v3.
-        //   -get:    needed for assertion (navigator.credentials.get) when the
-        //            widget signs userOp hashes with an existing passkey.
+        //   -create: passkey setup after login (navigator.credentials.create)
+        //            when the user's wallet has no passkey yet.
+        //   -get:    passkey assertions (navigator.credentials.get).
         //   identity-credentials-get: Google Identity Services one-tap.
         allow="publickey-credentials-create; publickey-credentials-get; identity-credentials-get"
         style={{

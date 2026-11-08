@@ -38,13 +38,23 @@ export function Nav() {
 }
 ```
 
-That's it. Users get a Rift wallet provisioned on first sign-in (Google, email, or phone), and you get an access token to call Rift's API on their behalf.
+That's it. Users sign in (Google, email, or phone), secure their wallet with a passkey on first sign-in, and you get an access token to call Rift's API on their behalf.
+
+## Passkey-only wallets
+
+Every Rift wallet is a smart account owned **only by the user's passkeys**. Signatures are made on the user's device and verified on-chain; Rift's servers (and your servers) never hold a key that can move user funds. Google and Apple are **login methods only**: they never approve transactions.
+
+- **First sign-in**: if the user's wallet has no passkey yet, the widget shows "Secure your wallet with a passkey" right after login. New users get a new passkey wallet; existing users keep the same wallet and address, now protected by the passkey. The result is on `user.passkeySetup` and `user.walletStatus`.
+- A user may skip that step. They stay signed in, but every fund move returns `409 PASSKEY_SETUP_REQUIRED` until they add a passkey.
+- **Fund moves from your app or server** (transfers, swaps, bridges, offramps…) made without a passkey proof return **`202 { status: "APPROVAL_REQUIRED", approvalId, approvalUrl }`**. The user approves them with their passkey, in `<RiftApprove />` (below) or by opening `approvalUrl`.
 
 ## Register the embedding page's origin
 
 Before going live, add the origin of **every page that renders `<RiftAuth />`** (for example `https://app.example.com`, plus `http://localhost:5173` or whatever you use in dev) to your project's **allowed origins** in the Rift dashboard (project → Origins → Add origin).
 
-`<RiftAuth />` renders the hosted Rift widget in an iframe, and passkey signing runs inside it, so the browser marks those WebAuthn assertions as cross-origin and records the embedding page as their top origin. The Rift signing enclave rejects a cross-origin assertion unless that top origin is one of the project's allowed origins. If the page is not registered, the modal may still load, but **passkey signing inside the iframe will be rejected**. There is nothing to change in your code: the list is enforced server-side from what you register in the dashboard (a custom `widget_domain` counts as registered).
+Also register every page that renders `<RiftApprove />`.
+
+`<RiftAuth />` and `<RiftApprove />` render the hosted Rift widget in an iframe, and passkey setup and passkey approvals run inside it, so the browser marks those WebAuthn ceremonies as cross-origin and records the embedding page as their top origin. Rift rejects a cross-origin passkey registration or signature unless that top origin is one of the project's allowed origins. If the page is not registered, the modal may still load, but **passkey setup and approvals inside the iframe will be rejected**. There is nothing to change in your code: the list is enforced server-side from what you register in the dashboard (a custom `widget_domain` counts as registered).
 
 ## Making authenticated calls
 
@@ -72,6 +82,50 @@ async function send() {
 }
 ```
 
+If the call moves funds, expect a `202` approval request (see next section) instead of an immediate result.
+
+## Approvals
+
+```tsx
+import { useRiftApproval } from "@rift-finance/react";
+
+function SendButton() {
+  const { getAccessToken } = useRift();
+  const { requestApproval, approvalElement } = useRiftApproval();
+
+  async function send() {
+    const res = await fetch("/api/send", { /* … your server calls Rift … */ });
+    if (res.status === 202) {
+      // { status: "APPROVAL_REQUIRED", approvalId, approvalUrl, expiresAt, summary }
+      const outcome = await requestApproval(await res.json());
+      if (outcome.status === "approved") {
+        console.log("sent:", outcome.result?.transactionHash);
+      }
+    }
+  }
+
+  return (
+    <>
+      <button onClick={send}>Send</button>
+      {approvalElement}
+    </>
+  );
+}
+```
+
+Or render the component yourself:
+
+```tsx
+<RiftApprove
+  approvalId={approvalId}
+  onResult={({ status, result }) => {/* approved | rejected | expired | failed */}}
+  onError={(message) => {/* not terminal: user can retry in the widget */}}
+  onClose={() => setApprovalId(null)}
+/>
+```
+
+The widget reuses the user's Rift session (or asks them to sign in), shows what is being approved, and asks for their passkey. Approval requests expire (30 minutes by default) and can be used once.
+
 ## API
 
 ### `<RiftProvider>`
@@ -97,7 +151,7 @@ async function send() {
 | `backdropStyle` | `CSSProperties` | — | Escape hatch for anything `backdrop` doesn't cover (custom transitions, z-index, etc.). |
 | `iframeStyle` | `CSSProperties` | — | Escape hatch for the iframe (borders, custom shadows, filters). |
 
-Mount this once near the root. It renders nothing until `useRift().open()` is called.
+Mount this once near the root. It renders nothing until `useRift().open()` is called. Its props and behaviour are unchanged from 0.3.x.
 
 ```tsx
 <RiftAuth
@@ -106,6 +160,30 @@ Mount this once near the root. It renders nothing until `useRift().open()` is ca
   backdrop={{ color: "rgba(255,255,255,0.5)", blur: 10 }}
 />
 ```
+
+### `<RiftApprove />`
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `approvalId` | `string` | _required_ | The `approvalId` from a `202 APPROVAL_REQUIRED` response. |
+| `onResult` | `(r: { approvalId, status, result? }) => void` | — | Fires once with the terminal outcome. `status` is `approved`, `rejected`, `expired` or `failed`; `result` is `{ transactionHash, userOpHash }` when approved. |
+| `onError` | `(message) => void` | — | Non-terminal problems (passkey prompt cancelled, signature rejected, network). |
+| `onClose` | `() => void` | — | User closed the widget (Close button or backdrop click). Unmount the component here. |
+| `inline` | `boolean` | `false` | Render the iframe in place instead of as a modal, e.g. on your own `/approve/:id` page. |
+| `maxHeight`, `maxWidth`, `radius`, `backdrop`, `backdropStyle`, `iframeStyle` | | | Same as `<RiftAuth />`. |
+
+Must be rendered inside `<RiftProvider>`.
+
+### `useRiftApproval(props?)`
+
+| Field | Type | Description |
+|---|---|---|
+| `requestApproval(input)` | `(id \| { approvalId }) => Promise<outcome>` | Shows the approval widget and resolves with `{ approvalId, status, result? }` as soon as the user approves / rejects, or `status: "dismissed"` if they close it first. |
+| `approvalElement` | `ReactNode` | Render this inside `<RiftProvider>`. `null` when idle. |
+| `approvalId` | `string \| null` | The approval currently shown. |
+| `dismiss()` | `() => void` | Close it programmatically. |
+
+`props` are passed to `<RiftApprove />` (visual knobs, `onError`, `inline`).
 
 ### `useRift()`
 
@@ -129,6 +207,18 @@ interface RiftUser {
   btcAddress?: string;   // Bitcoin wallet
   accessToken: string;   // JWT for API calls
   expiresAt?: string;    // ISO timestamp
+  walletStatus?: {       // at sign-in; not persisted across reloads
+    mode: "none" | "legacy" | "passkey";
+    walletAddress: string | null;
+    passkeyCount: number;
+    chains: { chainId: number; deployed: boolean; ownerMode: string }[];
+    needsPasskeySetup: boolean;
+  };
+  passkeySetup?: {       // when the user set up a passkey during this sign-in
+    status: "active" | "migrated" | "migrating" | "new_wallet" | "pending_signature";
+    walletAddress?: string;
+    previousAddress?: string; // "new_wallet": old, unrecoverable address
+  };
 }
 ```
 
@@ -201,6 +291,14 @@ These escape hatches keep the surface tight (no need to add a prop for every pos
 
 Every new prop is optional with the previous default. Apps on 0.1.x can upgrade to 0.2.0 with no code change and get the same modal they had before.
 
+## Development
+
+```bash
+npm install
+npm test        # vitest + Testing Library (jsdom)
+npm run build
+```
+
 ## Self-hosting the widget
 
 The default widget URL is `https://widget.riftfi.xyz`. If you need to self-host (compliance, white-labelling), deploy the [widget](https://github.com/Rift-FI/rift/tree/master/widget) source and pass the URL to the provider:
@@ -211,7 +309,7 @@ The default widget URL is `https://widget.riftfi.xyz`. If you need to self-host 
 
 ## Full docs
 
-Integration walkthrough, OpenAPI spec, transaction signing flows: **https://service.riftfi.xyz/docs**
+Integration walkthrough, OpenAPI spec, passkey signing and approval flows: **https://service.riftfi.xyz/docs**
 
 - Live API explorer: https://developers.riftfi.xyz
 - OpenAPI spec: https://github.com/Rift-FI/Rift-Sdk-Wrapper/blob/main/docs.json

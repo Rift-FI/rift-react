@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { RiftConfig, RiftEvent, RiftMode, RiftUser } from "./types";
 import { silentLogout, silentRefresh } from "./silentRefresh";
+import { detectHostTheme } from "./theme";
 
 // Widget URL by environment. The widget is a separate Vite SPA that
 // gets built once per environment (the backend URL is baked into the
@@ -61,6 +62,12 @@ interface RiftContextValue {
   _iframeSrc: string;
   _iframeHeight: number;
   _onIframeLoad: () => void;
+  /**
+   * <RiftApprove> registers its iframe window here so the provider's
+   * sign-in listener ignores that frame's events (resize, close, …).
+   * Returns an unregister function.
+   */
+  _registerFrame: (win: Window) => () => void;
 }
 
 const RiftContext = createContext<RiftContextValue | null>(null);
@@ -141,6 +148,15 @@ export function RiftProvider({
   // getAccessToken() simultaneously and the token is stale, we only
   // want one network call.
   const refreshInFlight = useRef<Promise<string> | null>(null);
+
+  // Windows of mounted <RiftApprove> iframes (see _registerFrame).
+  const otherFrames = useRef(new Set<Window>());
+  const registerFrame = useCallback((win: Window) => {
+    otherFrames.current.add(win);
+    return () => {
+      otherFrames.current.delete(win);
+    };
+  }, []);
 
   const setAndPersist = useCallback(
     (next: RiftUser | null) => {
@@ -264,6 +280,7 @@ export function RiftProvider({
     if (typeof window === "undefined") return;
     const handler = (e: MessageEvent) => {
       if (e.origin !== widgetOrigin) return;
+      if (e.source && otherFrames.current.has(e.source as Window)) return;
       const data = e.data as RiftEvent | undefined;
       if (!data || typeof data !== "object" || typeof data.type !== "string") return;
       if (!data.type.startsWith("rift:")) return;
@@ -287,6 +304,8 @@ export function RiftProvider({
             btcAddress: data.btcAddress,
             accessToken: data.accessToken,
             expiresAt: data.expiresAt,
+            ...(data.walletStatus ? { walletStatus: data.walletStatus } : {}),
+            ...(data.passkeySetup ? { passkeySetup: data.passkeySetup } : {}),
           };
           setAndPersist(next);
           setIsOpen(false);
@@ -328,26 +347,8 @@ export function RiftProvider({
       t: String(openToken),
     });
 
-    // Best-effort: match the host page's theme so the modal blends in
-    // instead of flashing white over a dark site. Checks data-theme,
-    // the `dark` class convention, then system preference.
-    if (typeof document !== "undefined") {
-      const html = document.documentElement;
-      const attr = html.getAttribute("data-theme");
-      let theme: string | null = null;
-      if (attr === "dark" || attr === "light") theme = attr;
-      else if (
-        html.classList.contains("dark") ||
-        document.body?.classList.contains("dark")
-      )
-        theme = "dark";
-      else if (
-        window.matchMedia &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches
-      )
-        theme = "dark";
-      if (theme) params.set("theme", theme);
-    }
+    const theme = detectHostTheme();
+    if (theme) params.set("theme", theme);
 
     return `${resolvedWidgetUrl.replace(/\/$/, "")}/?${params.toString()}`;
   }, [apiKey, mode, openToken, resolvedWidgetUrl]);
@@ -371,6 +372,7 @@ export function RiftProvider({
       _iframeSrc: iframeSrc,
       _iframeHeight: iframeHeight,
       _onIframeLoad: onIframeLoad,
+      _registerFrame: registerFrame,
     }),
     [
       apiKey,
@@ -386,6 +388,7 @@ export function RiftProvider({
       iframeSrc,
       iframeHeight,
       onIframeLoad,
+      registerFrame,
     ]
   );
 
